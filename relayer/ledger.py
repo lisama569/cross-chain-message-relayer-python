@@ -33,11 +33,17 @@ class LocalChainLedger:
 
     # ---- 区块与最终性 ----
     def commit_message(self, message: CrossChainMessage) -> int:
-        """把消息写入指定高度的区块，返回区块高度。"""
+        """把消息写入区块，返回实际区块高度。
+
+        message.source_block <= 0 表示由账本分配到下一个高度；
+        否则写入指定高度（必须恰好是下一个高度且未被占用）。
+        """
         with self._lock:
             height = message.source_block
-            if height <= 0 or height in self._blocks:
-                raise LedgerError(f"非法或已存在的区块高度: {height}")
+            if height <= 0:
+                height = self._height + 1
+            if height in self._blocks:
+                raise LedgerError(f"区块高度已存在: {height}")
             if height > self._height + 1:
                 raise LedgerError(f"区块高度跳跃: {height} > {self._height + 1}")
             self._blocks[height] = [message.message_id]

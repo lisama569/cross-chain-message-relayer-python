@@ -1,6 +1,7 @@
 """跨链消息中继器：提交登记、最终性确认、按序执行、恢复续作。"""
 from __future__ import annotations
 
+import dataclasses
 import threading
 
 from .ledger import LedgerError, LocalChainLedger
@@ -58,8 +59,10 @@ class Relayer:
 
     def _expected_nonce(self, source_chain: str) -> int:
         seen = [self.nonces.get(source_chain, 0)]
+        # 被拒绝的消息不占位，不参与 nonce 推进
         seen += [r.message.nonce for r in self.records.values()
-                 if r.message.source_chain == source_chain]
+                 if r.message.source_chain == source_chain
+                 and r.status is not MessageStatus.REJECTED]
         return max(seen) + 1
 
     # ---- 提交 ----
@@ -103,7 +106,9 @@ class Relayer:
                 source.lock(message)
             else:
                 source.burn(message)
-            source.commit_message(message)
+            actual_height = source.commit_message(message)
+            if actual_height != message.source_block:
+                message = dataclasses.replace(message, source_block=actual_height)
 
             record = MessageRecord(message)
             record.history.append(
