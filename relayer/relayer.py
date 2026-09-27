@@ -202,7 +202,9 @@ class Relayer:
                                      RejectReason.SOURCE_REORGED)
             self._persist()
             resumed = self.poll_finality()
-            resumed += self.execute_ready()
+            for mid in self.execute_ready():
+                if mid not in resumed:
+                    resumed.append(mid)
             return resumed
 
     # ---- 观测 ----
